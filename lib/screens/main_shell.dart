@@ -1,43 +1,60 @@
 import 'package:flutter/material.dart';
+import '../demo_store.dart';
 import 'home_screen.dart';
 import 'chats_screen.dart';
 import 'favorites_screen.dart';
 import 'profile_screen.dart';
 import 'create_offer_screen.dart';
-import '../app_mode.dart';
 
 class MainShell extends StatefulWidget {
-  const MainShell({super.key});
+  final DemoStore store;
+  final String profileName;
+  final VoidCallback onSignOut;
+  final ValueChanged<String> onNameChanged;
+
+  const MainShell({
+    super.key,
+    required this.store,
+    required this.profileName,
+    required this.onSignOut,
+    required this.onNameChanged,
+  });
+
   @override
   State<MainShell> createState() => _MainShellState();
 }
 
 class _MainShellState extends State<MainShell> {
   int _i = 0;
-  final _pages = const [
-    HomeScreen(),
-    ChatsScreen(),
-    FavoritesScreen(),
-    ProfileScreen()
-  ];
-
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: IndexedStack(index: _i, children: _pages),
+        body: IndexedStack(
+          index: _i,
+          children: [
+            HomeScreen(store: widget.store),
+            ChatsScreen(store: widget.store),
+            FavoritesScreen(store: widget.store),
+            ProfileScreen(
+              store: widget.store,
+              profileName: widget.profileName,
+              onSignOut: widget.onSignOut,
+              onNameChanged: widget.onNameChanged,
+              onOpenChats: () => setState(() => _i = 1),
+            ),
+          ],
+        ),
         floatingActionButton: FloatingActionButton(
           backgroundColor: const Color(0xFFEB5A3D),
           foregroundColor: Colors.white,
           shape: const CircleBorder(),
           onPressed: () async {
-            if (previewMode) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content:
-                      Text('Публикация доступна после подключения Firebase')));
-              return;
-            }
             await Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const CreateOfferScreen()),
+              MaterialPageRoute(
+                builder: (_) => CreateOfferScreen(
+                  store: widget.store,
+                ),
+              ),
             );
           },
           child: const Icon(Icons.add, size: 28),

@@ -1,22 +1,42 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'app_mode.dart';
-import 'firebase_options.dart'; // создаётся командой: flutterfire configure
+import 'demo_store.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_shell.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  if (!previewMode) {
-    await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform);
-  }
-  runApp(const SkillSwapApp());
+void main() => runApp(const SkillSwapApp());
+
+class SkillSwapApp extends StatefulWidget {
+  const SkillSwapApp({super.key});
+
+  @override
+  State<SkillSwapApp> createState() => _SkillSwapAppState();
 }
 
-class SkillSwapApp extends StatelessWidget {
-  const SkillSwapApp({super.key});
+class _SkillSwapAppState extends State<SkillSwapApp> {
+  bool _isAuthenticated = false;
+  String _displayName = '';
+  final _demoStore = DemoStore();
+
+  void _signInLocally(String name) {
+    setState(() {
+      _displayName = name;
+      _isAuthenticated = true;
+    });
+    _demoStore.setCurrentUserName(name);
+  }
+
+  void _updateName(String name) {
+    setState(() => _displayName = name);
+    _demoStore.setCurrentUserName(name);
+  }
+
+  void _signOutLocally() {
+    setState(() {
+      _displayName = '';
+      _isAuthenticated = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'SkillSwap',
@@ -59,17 +79,13 @@ class SkillSwapApp extends StatelessWidget {
             ),
           ),
         ),
-        home: previewMode
-            ? const MainShell()
-            : StreamBuilder<User?>(
-                stream: FirebaseAuth.instance.authStateChanges(),
-                builder: (c, s) {
-                  if (s.connectionState == ConnectionState.waiting) {
-                    return const Scaffold(
-                        body: Center(child: CircularProgressIndicator()));
-                  }
-                  return s.hasData ? const MainShell() : const AuthScreen();
-                },
-              ),
+        home: _isAuthenticated
+            ? MainShell(
+                store: _demoStore,
+                profileName: _displayName,
+                onSignOut: _signOutLocally,
+                onNameChanged: _updateName,
+              )
+            : AuthScreen(onAuthenticated: _signInLocally),
       );
 }

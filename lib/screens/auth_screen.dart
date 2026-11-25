@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  final ValueChanged<String> onAuthenticated;
+
+  const AuthScreen({super.key, required this.onAuthenticated});
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -12,10 +12,10 @@ class _AuthScreenState extends State<AuthScreen> {
   final _name = TextEditingController();
   final _email = TextEditingController();
   final _pass = TextEditingController();
-  bool _isLogin = true, _loading = false;
+  bool _isLogin = true;
   bool _showWelcome = true;
 
-  Future<void> _submit() async {
+  void _submit() {
     final email = _email.text.trim();
     final password = _pass.text;
     final enteredName = _name.text.trim();
@@ -34,53 +34,16 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    setState(() => _loading = true);
-    try {
-      final auth = FirebaseAuth.instance;
-      final users = FirebaseFirestore.instance.collection('users');
-      if (_isLogin) {
-        final credential = await auth.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
-        final user = credential.user!;
-        final userDoc = users.doc(user.uid);
-        final userData = (await userDoc.get()).data();
-        final storedName = (userData?['name'] as String?)?.trim();
-        final authName = user.displayName?.trim();
-        final name =
-            authName != null && authName.isNotEmpty && authName != 'Студент'
-                ? authName
-                : (storedName?.isNotEmpty == true ? storedName : authName);
+    final name = _isLogin ? 'Сатыбалды Д.' : enteredName;
+    widget.onAuthenticated(name);
+  }
 
-        if (name != null && name.isNotEmpty) {
-          if (user.displayName != name) await user.updateDisplayName(name);
-          await userDoc.set(
-            {'name': name, 'email': user.email ?? email},
-            SetOptions(merge: true),
-          );
-        }
-      } else {
-        final credential = await auth.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
-        final user = credential.user!;
-        await user.updateDisplayName(enteredName);
-        await users.doc(user.uid).set({
-          'name': enteredName,
-          'email': email,
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
-    } on FirebaseException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message ?? 'Ошибка Firebase')));
-      }
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    _pass.dispose();
+    super.dispose();
   }
 
   Widget _actionButton(String label, VoidCallback onPressed,
@@ -227,12 +190,17 @@ class _AuthScreenState extends State<AuthScreen> {
                   controller: _pass,
                   obscureText: true,
                   decoration: const InputDecoration(labelText: 'Пароль')),
+              const SizedBox(height: 8),
+              Text(
+                'Демо-режим: данные не сохраняются',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 height: 48,
                 child: FilledButton(
-                  onPressed: _loading ? null : _submit,
+                  onPressed: _submit,
                   child: Text(_isLogin ? 'ВОЙТИ' : 'СОЗДАТЬ АККАУНТ'),
                 ),
               ),

@@ -1,207 +1,163 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../app_mode.dart';
+import '../demo_store.dart';
 import '../screens/chat_screen.dart';
 
 class OfferCard extends StatelessWidget {
   final String id;
   final Map<String, dynamic> data;
+  final DemoStore store;
   final bool showDelete;
-  const OfferCard(
-      {super.key,
-      required this.id,
-      required this.data,
-      this.showDelete = false});
+
+  const OfferCard({
+    super.key,
+    required this.id,
+    required this.data,
+    required this.store,
+    this.showDelete = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final me = previewMode ? null : FirebaseAuth.instance.currentUser;
     final isOffer = data['type'] == 'offer';
-    final mine = me != null && data['authorId'] == me.uid;
+    final authorId = data['authorId']?.toString() ?? 'demo-author-$id';
+    final authorName = data['authorName']?.toString() ?? 'Студент';
+    final mine = authorId == DemoStore.currentUserId;
     final color = isOffer ? const Color(0xFF5B55D6) : const Color(0xFFE98B63);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       clipBehavior: Clip.antiAlias,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(height: 60, color: color.withValues(alpha: 0.18)),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Chip(
-                label: Text(isOffer ? 'МОГУ' : 'ХОЧУ',
-                    style:
-                        TextStyle(color: color, fontWeight: FontWeight.bold)),
-                backgroundColor: color.withValues(alpha: 0.12),
-                side: BorderSide.none,
-              ),
-              const Spacer(),
-              if (me != null && showDelete && mine)
-                IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => FirebaseFirestore.instance
-                      .collection('offers')
-                      .doc(id)
-                      .delete(),
-                ),
-              if (me != null)
-                StreamBuilder<DocumentSnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(me.uid)
-                      .collection('favorites')
-                      .doc(id)
-                      .snapshots(),
-                  builder: (c, s) {
-                    if (s.hasError) {
-                      return IconButton(
-                        icon: const Icon(Icons.error_outline),
-                        tooltip: 'Не удалось загрузить избранное',
-                        onPressed: () => ScaffoldMessenger.of(c).showSnackBar(
-                          SnackBar(
-                              content: Text('Ошибка избранного: ${s.error}')),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(height: 60, color: color.withValues(alpha: 0.18)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Chip(
+                      label: Text(
+                        isOffer ? 'МОГУ' : 'ХОЧУ',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    }
-                    final fav = s.data?.exists ?? false;
-                    return IconButton(
-                      icon: Icon(fav ? Icons.favorite : Icons.favorite_border,
-                          color: fav ? Colors.red : null),
-                      onPressed: () async {
-                        final favorite = FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(me.uid)
-                            .collection('favorites')
-                            .doc(id);
-                        try {
-                          if (fav) {
-                            await favorite.delete();
-                          } else {
-                            await favorite.set(data);
-                          }
-                          if (c.mounted) {
-                            ScaffoldMessenger.of(c).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  fav
-                                      ? 'Удалено из избранного'
-                                      : 'Добавлено в избранное',
-                                ),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          }
-                        } on FirebaseException catch (e) {
-                          if (c.mounted) {
-                            ScaffoldMessenger.of(c).showSnackBar(
-                              SnackBar(
-                                content: Text(e.message ??
-                                    'Не удалось изменить избранное'),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                    );
-                  },
+                      ),
+                      backgroundColor: color.withValues(alpha: 0.12),
+                      side: BorderSide.none,
+                    ),
+                    const Spacer(),
+                    if (showDelete && mine)
+                      IconButton(
+                        tooltip: 'Удалить карточку',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => store.removeOffer(id),
+                      ),
+                    if (!mine)
+                      IconButton(
+                        tooltip: store.isFavorite(id)
+                            ? 'Убрать из избранного'
+                            : 'В избранное',
+                        icon: Icon(
+                          store.isFavorite(id)
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          color: store.isFavorite(id) ? Colors.red : null,
+                        ),
+                        onPressed: () => store.toggleFavorite(id),
+                      ),
+                  ],
                 ),
-            ]),
-            const SizedBox(height: 4),
-            Text(data['authorName'] ?? '',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color:
-                    isOffer ? const Color(0xFFEDEBFF) : const Color(0xFFFFEEE8),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(isOffer ? 'УМЕЮ' : 'ХОЧУ',
-                        style: TextStyle(fontSize: 9, color: color)),
-                    Text(data['skill'] ?? '',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ]),
-            ),
-            const SizedBox(height: 7),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color:
-                    isOffer ? const Color(0xFFFFEEE8) : const Color(0xFFEDEBFF),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(isOffer ? 'ИЩУ' : 'МОГУ',
-                        style: TextStyle(fontSize: 9, color: color)),
-                    Text(data['wantInReturn'] ?? '',
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
-                  ]),
-            ),
-            if ((data['description'] ?? '').toString().isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(data['description'],
-                  style: TextStyle(color: Colors.grey.shade700)),
-            ],
-            const SizedBox(height: 10),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: me != null && !mine
-                    ? () async {
-                        try {
-                          await FirebaseFirestore.instance
-                              .collection('requests')
-                              .add({
-                            'offerId': id,
-                            'fromUid': me.uid,
-                            'fromName': me.displayName ?? 'Студент',
-                            'toUid': data['authorId'],
-                            'toName': data['authorName'] ?? 'Студент',
-                            'status': 'pending',
-                            'createdAt': FieldValue.serverTimestamp(),
-                          });
-                          if (context.mounted) {
+                const SizedBox(height: 4),
+                Text(
+                  authorName,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 10),
+                _SkillBox(
+                  label: isOffer ? 'УМЕЮ' : 'ХОЧУ',
+                  value: data['skill']?.toString() ?? '',
+                  color: isOffer
+                      ? const Color(0xFFEDEBFF)
+                      : const Color(0xFFFFEEE8),
+                  labelColor: color,
+                ),
+                const SizedBox(height: 7),
+                _SkillBox(
+                  label: isOffer ? 'ИЩУ' : 'МОГУ',
+                  value: data['wantInReturn']?.toString() ?? '',
+                  color: isOffer
+                      ? const Color(0xFFFFEEE8)
+                      : const Color(0xFFEDEBFF),
+                  labelColor: color,
+                ),
+                if ((data['description'] ?? '').toString().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    data['description'].toString(),
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: mine
+                        ? null
+                        : () {
+                            final chat = store.openChat(authorId, authorName);
                             Navigator.push(
                               context,
                               MaterialPageRoute(
                                 builder: (_) => ChatScreen(
-                                  otherUid: data['authorId'],
-                                  otherName: data['authorName'] ?? 'Студент',
+                                  store: store,
+                                  chatId: chat.id,
                                 ),
                               ),
                             );
-                          }
-                        } on FirebaseException catch (error) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  error.message ??
-                                      'Не удалось отправить запрос',
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                      }
-                    : null,
-                child: const Text('ОТПРАВИТЬ ЗАПРОС'),
-              ),
+                          },
+                    child: const Text('ОТПРАВИТЬ ЗАПРОС'),
+                  ),
+                ),
+              ],
             ),
-          ]),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
+}
+
+class _SkillBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final Color labelColor;
+
+  const _SkillBox({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.labelColor,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontSize: 9, color: labelColor)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
 }

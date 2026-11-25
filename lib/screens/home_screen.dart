@@ -1,44 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../app_mode.dart';
+import '../demo_store.dart';
 import '../widgets/offer_card.dart';
-
-const _previewOffers = [
-  {
-    'authorId': 'preview-maria',
-    'authorName': 'Мария',
-    'type': 'offer',
-    'skill': 'Английский язык',
-    'wantInReturn': 'Помощь с математикой',
-    'description': 'Помогу разговориться и разобраться с грамматикой.',
-  },
-  {
-    'authorId': 'preview-ivan',
-    'authorName': 'Иван',
-    'type': 'request',
-    'skill': 'Хочу научиться играть на гитаре',
-    'wantInReturn': 'Могу помочь с программированием',
-    'description': 'Ищу занятия для начинающего.',
-  },
-];
+import '../widgets/video_lesson_card.dart';
+import 'create_video_lesson_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final DemoStore store;
+
+  const HomeScreen({super.key, required this.store});
+
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  String _filter = 'all'; // all | offer | request
+  String _filter = 'all';
   String _mode = 'swap';
+  String _query = '';
+
+  static const _swapFilters = {
+    'all': 'Все',
+    'offer': 'Могу',
+    'request': 'Хочу',
+  };
+  static const _videoFilters = {
+    'all': 'Все',
+    'math': 'Математика',
+    'it': 'IT',
+    'design': 'Дизайн',
+  };
 
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          title: const Text('SkillSwap',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          actions: [
-            const Padding(
+          title: const Text(
+            'SkillSwap',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          actions: const [
+            Padding(
               padding: EdgeInsets.only(right: 12),
               child: CircleAvatar(
                 radius: 14,
@@ -47,157 +47,123 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        body: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'swap', label: Text('Обмен')),
-                ButtonSegment(value: 'videos', label: Text('Видеоуроки')),
-              ],
-              selected: {_mode},
-              onSelectionChanged: (value) =>
-                  setState(() => _mode = value.first),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Найти навык или человека',
-                prefixIcon: Icon(Icons.search),
-                contentPadding: EdgeInsets.symmetric(vertical: 10),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'swap', label: Text('Обмен')),
+                  ButtonSegment(value: 'videos', label: Text('Видеоуроки')),
+                ],
+                selected: {_mode},
+                onSelectionChanged: (value) => setState(() {
+                  _mode = value.first;
+                  _filter = 'all';
+                }),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Wrap(spacing: 8, children: [
-              for (final f in (_mode == 'videos'
-                      ? const {
-                          'all': 'Все',
-                          'math': 'Математика',
-                          'it': 'IT',
-                          'design': 'Дизайн'
-                        }
-                      : const {
-                          'all': 'Все',
-                          'offer': 'Могу',
-                          'request': 'Хочу'
-                        })
-                  .entries)
-                ChoiceChip(
-                  label: Text(f.value),
-                  selected: _filter == f.key,
-                  onSelected: (_) => setState(() => _filter = f.key),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: TextField(
+                onChanged: (value) => setState(() => _query = value.trim()),
+                decoration: const InputDecoration(
+                  hintText: 'Найти навык или человека',
+                  prefixIcon: Icon(Icons.search),
+                  contentPadding: EdgeInsets.symmetric(vertical: 10),
                 ),
-            ]),
-          ),
-          Expanded(
-            child: _mode == 'videos'
-                ? ListView(
-                    children: const [
-                      _VideoCard(
-                          title: 'Производная за 10 минут',
-                          author: 'Ерсултан А.',
-                          category: 'Математика',
-                          color: Color(0xFFDCD9FF)),
-                      _VideoCard(
-                          title: 'Основы дизайна',
-                          author: 'Мария К.',
-                          category: 'Дизайн',
-                          color: Color(0xFFFFE6DD)),
-                    ],
-                  )
-                : previewMode
-                    ? ListView(
-                        children: [
-                          for (var i = 0; i < _previewOffers.length; i++)
-                            if (_filter == 'all' ||
-                                _previewOffers[i]['type'] == _filter)
-                              OfferCard(
-                                id: 'preview-$i',
-                                data: _previewOffers[i],
-                              ),
-                        ],
-                      )
-                    : StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance
-                            .collection('offers')
-                            .orderBy('createdAt', descending: true)
-                            .snapshots(),
-                        builder: (c, s) {
-                          if (!s.hasData) {
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          }
-                          final docs = s.data!.docs
-                              .where((d) =>
-                                  _filter == 'all' ||
-                                  (d.data() as Map)['type'] == _filter)
-                              .toList();
-                          if (docs.isEmpty) {
-                            return const Center(
-                                child: Text('Пока нет баннеров. Нажми +'));
-                          }
-                          return ListView.builder(
-                            itemCount: docs.length,
-                            itemBuilder: (c, i) => OfferCard(
-                              id: docs[i].id,
-                              data: docs[i].data() as Map<String, dynamic>,
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ]),
-      );
-}
-
-class _VideoCard extends StatelessWidget {
-  final String title;
-  final String author;
-  final String category;
-  final Color color;
-
-  const _VideoCard({
-    required this.title,
-    required this.author,
-    required this.category,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) => Card(
-        clipBehavior: Clip.antiAlias,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            height: 110,
-            color: color,
-            child: const Center(
-              child: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Icon(Icons.play_arrow, color: Color(0xFF5B55D6)),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Row(children: [
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text(author,
-                          style: TextStyle(color: Colors.grey.shade600)),
-                    ]),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  for (final filter
+                      in (_mode == 'videos' ? _videoFilters : _swapFilters)
+                          .entries)
+                    ChoiceChip(
+                      label: Text(filter.value),
+                      selected: _filter == filter.key,
+                      onSelected: (_) => setState(() => _filter = filter.key),
+                    ),
+                ],
               ),
-              Chip(label: Text(category)),
-            ]),
-          ),
-        ]),
+            ),
+            Expanded(
+              child: AnimatedBuilder(
+                animation: widget.store,
+                builder: (context, _) =>
+                    _mode == 'videos' ? _videoList() : _offerList(),
+              ),
+            ),
+          ],
+        ),
       );
+
+  Widget _offerList() {
+    final query = _query.toLowerCase();
+    final offers = widget.store.offers.where((offer) {
+      final matchesType = _filter == 'all' || offer.type == _filter;
+      final matchesQuery = query.isEmpty ||
+          '${offer.skill} ${offer.authorName} ${offer.description}'
+              .toLowerCase()
+              .contains(query);
+      return matchesType && matchesQuery;
+    }).toList();
+    if (offers.isEmpty) {
+      return const Center(child: Text('Пока нет карточек. Нажми +'));
+    }
+    return ListView(
+      children: [
+        for (final offer in offers)
+          OfferCard(
+            id: offer.id,
+            data: offer.toMap(),
+            store: widget.store,
+            showDelete: offer.authorId == DemoStore.currentUserId,
+          ),
+      ],
+    );
+  }
+
+  Widget _videoList() {
+    final query = _query.toLowerCase();
+    final lessons = widget.store.videoLessons.where((lesson) {
+      final category = lesson.category.toLowerCase();
+      final matchesCategory = _filter == 'all' ||
+          (_filter == 'math' && category.contains('мат')) ||
+          (_filter == 'it' && category.contains('it')) ||
+          (_filter == 'design' && category.contains('диз'));
+      final matchesQuery = query.isEmpty ||
+          '${lesson.title} ${lesson.authorName} ${lesson.category}'
+              .toLowerCase()
+              .contains(query);
+      return matchesCategory && matchesQuery;
+    }).toList();
+
+    return ListView(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: OutlinedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => CreateVideoLessonScreen(store: widget.store),
+              ),
+            ),
+            icon: const Icon(Icons.video_call_outlined),
+            label: const Text('Добавить видеоурок'),
+          ),
+        ),
+        if (lessons.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(child: Text('Уроков по этому фильтру пока нет')),
+          ),
+        for (final lesson in lessons) VideoLessonCard(lesson: lesson),
+      ],
+    );
+  }
 }
